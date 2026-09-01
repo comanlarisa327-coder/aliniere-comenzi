@@ -15,7 +15,7 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* Culoare de fundal deschisă (Pastel Cald & Gradient) */
+    /* Fundal general pastel deschis */
     .stApp {
         background: linear-gradient(125deg, #f0f9ff 0%, #e0f2fe 50%, #f1f5f9 100%);
         color: #0f172a;
@@ -29,7 +29,7 @@ st.markdown(
         border-right: 1px solid #cbd5e1;
     }
 
-    /* Animație pentru Titlu (Fade In & Slide Down) */
+    /* Titluri */
     .main-title {
         font-size: 2.3rem;
         font-weight: 800;
@@ -46,17 +46,65 @@ st.markdown(
     }
 
     @keyframes fadeInDown {
-        0% {
-            opacity: 0;
-            transform: translateY(-20px);
-        }
-        100% {
-            opacity: 1;
-            transform: translateY(0);
-        }
+        0% { opacity: 0; transform: translateY(-20px); }
+        100% { opacity: 1; transform: translateY(0); }
     }
 
-    /* Animație continuă cu sfere plutitoare în background */
+    /* Emoji-uri în Colțuri */
+    .corner-emoji {
+        position: fixed;
+        font-size: 2.2rem;
+        z-index: 9999;
+        pointer-events: none;
+        user-select: none;
+        filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1));
+    }
+
+    .top-left {
+        top: 20px;
+        left: 25px;
+        animation: swingEmoji 3s ease-in-out infinite alternate;
+    }
+
+    .top-right {
+        top: 20px;
+        right: 25px;
+        animation: bounceEmoji 2.5s ease-in-out infinite alternate;
+    }
+
+    .bottom-left {
+        bottom: 20px;
+        left: 25px;
+        animation: floatEmoji 3.5s ease-in-out infinite alternate;
+    }
+
+    .bottom-right {
+        bottom: 20px;
+        right: 25px;
+        animation: pulseEmoji 2s ease-in-out infinite alternate;
+    }
+
+    @keyframes swingEmoji {
+        0% { transform: rotate(-15deg) translateY(0); }
+        100% { transform: rotate(15deg) translateY(-8px); }
+    }
+
+    @keyframes bounceEmoji {
+        0% { transform: translateY(0) scale(1); }
+        100% { transform: translateY(-12px) scale(1.1); }
+    }
+
+    @keyframes floatEmoji {
+        0% { transform: translate(0, 0) rotate(0deg); }
+        100% { transform: translate(6px, -10px) rotate(10deg); }
+    }
+
+    @keyframes pulseEmoji {
+        0% { transform: scale(1); }
+        100% { transform: scale(1.2); }
+    }
+
+    /* Sfere mari plutitoare de fundal */
     .floating-shape-1 {
         position: fixed;
         width: 250px;
@@ -95,7 +143,7 @@ st.markdown(
         100% { transform: translate(30px, -20px) scale(0.9); }
     }
 
-    /* Carduri Metrici cu efect de Hover */
+    /* Carduri Metrici */
     div[data-testid="stMetric"] {
         background: rgba(255, 255, 255, 0.85);
         backdrop-filter: blur(8px);
@@ -111,7 +159,7 @@ st.markdown(
         box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
     }
 
-    /* Buton Principal cu Animație Pulse & Glow */
+    /* Buton Principal */
     div.stButton > button:first-child {
         background: linear-gradient(135deg, #0284c7, #2563eb);
         color: white;
@@ -146,7 +194,13 @@ st.markdown(
     }
     </style>
 
-    <!-- Elemente animate de fundal -->
+    <!-- Emoji-uri animate plasate în cele 4 colțuri -->
+    <div class="corner-emoji top-left">📦</div>
+    <div class="corner-emoji top-right">🚀</div>
+    <div class="corner-emoji bottom-left">📊</div>
+    <div class="corner-emoji bottom-right">✨</div>
+
+    <!-- Sfere plutitoare de fundal -->
     <div class="floating-shape-1"></div>
     <div class="floating-shape-2"></div>
 """,
@@ -338,9 +392,9 @@ with st.sidebar:
     st.markdown(
         """
     1. **Încarcă fișierul** Excel cu date brute.
-    2. **Alege depozitul** din meniu.
-    3. Apasă butonul **Generează Raportul**.
-    4. Descarcă fișierul calculat.
+    2. **Alege depozitul** dorit din listă.
+    3. Apasă **Generează Raportul**.
+    4. Descarcă fișierul calculat direct.
     
     ---
     **Reguli de reconciliere:**  
@@ -352,14 +406,14 @@ with st.sidebar:
     )
 
 # ==========================================
-# ZONA PRINCIPALĂ
+# CORPUL APLICAȚIEI
 # ==========================================
 st.markdown(
     '<div class="main-title">📦 Aliniere Comenzi & Reconciliere Stoc</div>',
     unsafe_allow_html=True,
 )
 st.markdown(
-    '<div class="sub-title">Sistem automat pentru calculul comenzilor BO Franța, BO România și Tranzit</div>',
+    '<div class="sub-title">Sistem automat de calcul pentru BO Franța, BO România și Tranzit</div>',
     unsafe_allow_html=True,
 )
 
@@ -379,20 +433,19 @@ st.write("")
 
 if uploaded_file:
     if st.button("🚀 Generează Raportul", use_container_width=True):
-        with st.spinner("Se prelucrează datele și formulele..."):
+        with st.spinner("Se prelucrează datele și calculele..."):
             try:
                 excel_data, df_rezultat = proceseaza_alinierea(
                     uploaded_file, plant
                 )
 
-                # Animație dublă de succes pe ecran
                 st.balloons()
 
                 st.success(
                     f"✨ Raportul pentru depozitul **{plant}** a fost generat cu succes!"
                 )
 
-                # Carduri statistice animate
+                # Carduri statistice
                 total_articole = len(df_rezultat)
                 total_delete = (
                     df_rezultat["ACTION"].str.startswith("DELETE").sum()
@@ -406,7 +459,7 @@ if uploaded_file:
                 m3.metric("Acțiuni DELETE", total_delete)
                 m4.metric("Status OK", total_ok)
 
-                # Tabel rezultate
+                # Previzualizare tabel
                 st.subheader("📋 Previzualizare Rezultate")
                 st.dataframe(df_rezultat, use_container_width=True, height=400)
 
