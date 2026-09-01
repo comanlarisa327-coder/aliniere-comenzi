@@ -15,14 +15,14 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* Ramă elegantă în jurul întregului ecran */
+    /* Ramă elegantă în jurul ecranului */
     .screen-frame {
         position: fixed;
         top: 0;
         left: 0;
         width: 100vw;
         height: 100vh;
-        border: 9px solid rgba(14, 165, 233, 0.45); /* Ramă azurie modernă */
+        border: 9px solid rgba(14, 165, 233, 0.45);
         box-shadow: inset 0 0 20px rgba(14, 165, 233, 0.2), 0 0 15px rgba(14, 165, 233, 0.3);
         pointer-events: none;
         z-index: 99998;
@@ -74,29 +74,10 @@ st.markdown(
         filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1));
     }
 
-    .top-left {
-        top: 22px;
-        left: 25px;
-        animation: swingEmoji 3s ease-in-out infinite alternate;
-    }
-
-    .top-right {
-        top: 22px;
-        right: 25px;
-        animation: bounceEmoji 2.5s ease-in-out infinite alternate;
-    }
-
-    .bottom-left {
-        bottom: 22px;
-        left: 25px;
-        animation: floatEmoji 3.5s ease-in-out infinite alternate;
-    }
-
-    .bottom-right {
-        bottom: 22px;
-        right: 25px;
-        animation: pulseEmoji 2s ease-in-out infinite alternate;
-    }
+    .top-left { top: 22px; left: 25px; animation: swingEmoji 3s ease-in-out infinite alternate; }
+    .top-right { top: 22px; right: 25px; animation: bounceEmoji 2.5s ease-in-out infinite alternate; }
+    .bottom-left { bottom: 22px; left: 25px; animation: floatEmoji 3.5s ease-in-out infinite alternate; }
+    .bottom-right { bottom: 22px; right: 25px; animation: pulseEmoji 2s ease-in-out infinite alternate; }
 
     @keyframes swingEmoji {
         0% { transform: rotate(-15deg) translateY(0); }
@@ -118,7 +99,7 @@ st.markdown(
         100% { transform: scale(1.2); }
     }
 
-    /* Sfere plutitoare de fundal */
+    /* Sfere mari plutitoare de fundal */
     .floating-shape-1 {
         position: fixed;
         width: 250px;
@@ -226,7 +207,7 @@ st.markdown(
 
 
 def gaseste_coloana(df, posibilitati, default=None):
-    """Găsește numele corect al coloanei chiar dacă diferă spațiile sau majusculele."""
+    """Găsește coloana potrivită chiar dacă diferă literele mici/mari sau spațiile."""
     cols_map = {str(c).strip().lower(): c for c in df.columns}
     for pos in posibilitati:
         pos_clean = pos.strip().lower()
@@ -240,28 +221,17 @@ def gaseste_coloana(df, posibilitati, default=None):
     return default
 
 
-def proceseaza_alinierea(uploaded_file, depozit_selectat):
-    excel = pd.ExcelFile(uploaded_file)
-    nume_foi = excel.sheet_names
+def detecteaza_index_foaie(lista_foi, cuvinte_cheie, index_implicit=0):
+    """Detectează automat indexul foii pe baza unor cuvinte cheie."""
+    for i, foaie in enumerate(lista_foi):
+        f_clean = foaie.strip().lower()
+        if any(kw in f_clean for kw in cuvinte_cheie):
+            return i
+    return min(index_implicit, len(lista_foi) - 1)
 
-    sheet_fr = next((s for s in nume_foi if "fr" in s.lower()), None)
-    sheet_ro = next((s for s in nume_foi if "ro" in s.lower()), None)
-    sheet_tp = next(
-        (
-            s
-            for s in nume_foi
-            if "t+p" in s.lower()
-            or "transit" in s.lower()
-            or "progress" in s.lower()
-        ),
-        None,
-    )
 
-    if not sheet_fr or not sheet_ro or not sheet_tp:
-        raise ValueError(
-            f"Nu s-au găsit toate foile necesare în fișier. Foi existente: {nume_foi}"
-        )
-
+def proceseaza_alinierea(uploaded_file, depozit_selectat, sheet_fr, sheet_ro, sheet_tp):
+    # Citire date din foile selectate de utilizator
     franta = pd.read_excel(uploaded_file, sheet_name=sheet_fr)
     romania = pd.read_excel(uploaded_file, sheet_name=sheet_ro)
     transit = pd.read_excel(uploaded_file, sheet_name=sheet_tp)
@@ -270,6 +240,7 @@ def proceseaza_alinierea(uploaded_file, depozit_selectat):
     romania.columns = romania.columns.astype(str).str.strip()
     transit.columns = transit.columns.astype(str).str.strip()
 
+    # Identificare automată a coloanelor
     col_plant_fr = gaseste_coloana(franta, ["Plant", "Depozit"])
     col_plant_ro = gaseste_coloana(romania, ["Plant", "Depozit"])
     col_plant_tp = gaseste_coloana(transit, ["Plant", "Depozit"])
@@ -306,6 +277,7 @@ def proceseaza_alinierea(uploaded_file, depozit_selectat):
         default=transit.columns[1] if len(transit.columns) > 1 else transit.columns[0],
     )
 
+    # Filtrare pe depozit
     if col_plant_fr:
         franta = franta[
             franta[col_plant_fr].astype(str).str.strip().str.upper()
@@ -391,6 +363,7 @@ def proceseaza_alinierea(uploaded_file, depozit_selectat):
     rezultat["ACTION"] = rezultat["DIFF"].apply(stabileste_actiune)
     rezultat = rezultat.sort_values(by="DIFF", ascending=True)
 
+    # 4. Salvare în memorie
     output_buffer = io.BytesIO()
     with pd.ExcelWriter(output_buffer, engine="openpyxl") as writer:
         pivot_fr.to_excel(writer, sheet_name="Pivot_BO_FR", index=False)
@@ -409,9 +382,10 @@ with st.sidebar:
     st.markdown(
         """
     1. **Încarcă fișierul** Excel cu date brute.
-    2. **Alege depozitul** din selector.
-    3. Apasă **Generează Raportul**.
-    4. Descarcă fișierul calculat.
+    2. **Verifică foile selectate** (se completează automat).
+    3. **Alege depozitul** dorit.
+    4. Apasă **Generează Raportul**.
+    5. Descarcă fișierul final calculat.
     
     ---
     **Reguli de reconciliere:**  
@@ -438,22 +412,43 @@ col1, col2 = st.columns([2, 1])
 
 with col1:
     uploaded_file = st.file_uploader(
-        "Încarcă fișierul Excel (.xlsx):", type=["xlsx"]
+        "1. Încarcă fișierul Excel (.xlsx):", type=["xlsx"]
     )
 
 with col2:
     plant = st.selectbox(
-        "Selectează Depozitul (Plant):", ["FR01", "FR02", "FR03", "FR06"]
+        "2. Selectează Depozitul (Plant):", ["FR01", "FR02", "FR03", "FR06"]
     )
 
-st.write("")
-
+# Dacă s-a încărcat un fișier, afișăm selectorul de foi
 if uploaded_file:
-    if st.button("🚀 Generează Raportul", use_container_width=True):
-        with st.spinner("Se prelucrează datele și calculele..."):
-            try:
+    try:
+        excel_inspect = pd.ExcelFile(uploaded_file)
+        nume_foi = excel_inspect.sheet_names
+
+        st.markdown("---")
+        st.markdown("##### ⚙️ Asociază foile din fișier (detectate automat):")
+        
+        c_fr, c_ro, c_tp = st.columns(3)
+        
+        with c_fr:
+            idx_fr = detecteaza_index_foaie(nume_foi, ["fr", "france", "franta"], 0)
+            sheet_fr = st.selectbox("📄 Foaie Franța (BO FR):", nume_foi, index=idx_fr)
+
+        with c_ro:
+            idx_ro = detecteaza_index_foaie(nume_foi, ["ro", "romania", "roumanie"], 1)
+            sheet_ro = st.selectbox("📄 Foaie România (BO RO):", nume_foi, index=idx_ro)
+
+        with c_tp:
+            idx_tp = detecteaza_index_foaie(nume_foi, ["t+p", "t&p", "transit", "tranzit", "progress", "progres"], 2)
+            sheet_tp = st.selectbox("📄 Foaie Transit & Progress:", nume_foi, index=idx_tp)
+
+        st.write("")
+
+        if st.button("🚀 Generează Raportul", use_container_width=True):
+            with st.spinner("Se prelucrează datele și calculele..."):
                 excel_data, df_rezultat = proceseaza_alinierea(
-                    uploaded_file, plant
+                    uploaded_file, plant, sheet_fr, sheet_ro, sheet_tp
                 )
 
                 st.balloons()
@@ -476,7 +471,7 @@ if uploaded_file:
                 m3.metric("Acțiuni DELETE", total_delete)
                 m4.metric("Status OK", total_ok)
 
-                # Tabel rezultate
+                # Previzualizare tabel
                 st.subheader("📋 Previzualizare Rezultate")
                 st.dataframe(df_rezultat, use_container_width=True, height=400)
 
@@ -488,5 +483,5 @@ if uploaded_file:
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True,
                 )
-            except Exception as e:
-                st.error(f"❌ A apărut o eroare la procesare: {e}")
+    except Exception as e:
+        st.error(f"❌ A apărut o eroare: {e}")
