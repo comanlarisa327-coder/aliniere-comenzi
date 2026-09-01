@@ -2,8 +2,45 @@ import io
 import pandas as pd
 import streamlit as st
 
+# ==========================================
+# CONFIGURARE PAGINĂ ȘI DESIGN
+# ==========================================
+st.set_page_config(
+    page_title="Portal Aliniere Comenzi",
+    page_icon="📦",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+st.markdown(
+    """
+    <style>
+    .main-title {
+        font-size: 2.1rem;
+        font-weight: 700;
+        color: #1E3A8A;
+        margin-bottom: 0.2rem;
+    }
+    .sub-title {
+        font-size: 1rem;
+        color: #6B7280;
+        margin-bottom: 1.5rem;
+    }
+    .stDownloadButton button {
+        background-color: #2563EB;
+        color: white;
+        font-weight: 600;
+        border-radius: 8px;
+        padding: 0.5rem 1rem;
+    }
+    </style>
+""",
+    unsafe_allow_html=True,
+)
+
 
 def gaseste_coloana(df, posibilitati, default=None):
+    """Găsește numele corect al coloanei chiar dacă diferă spațiile sau majusculele."""
     cols_map = {str(c).strip().lower(): c for c in df.columns}
     for pos in posibilitati:
         pos_clean = pos.strip().lower()
@@ -18,6 +55,7 @@ def gaseste_coloana(df, posibilitati, default=None):
 
 
 def proceseaza_alinierea(uploaded_file, depozit_selectat):
+    # Citire foi
     excel = pd.ExcelFile(uploaded_file)
     nume_foi = excel.sheet_names
 
@@ -47,6 +85,7 @@ def proceseaza_alinierea(uploaded_file, depozit_selectat):
     romania.columns = romania.columns.astype(str).str.strip()
     transit.columns = transit.columns.astype(str).str.strip()
 
+    # Identificare automată a coloanelor
     col_plant_fr = gaseste_coloana(franta, ["Plant", "Depozit"])
     col_plant_ro = gaseste_coloana(romania, ["Plant", "Depozit"])
     col_plant_tp = gaseste_coloana(transit, ["Plant", "Depozit"])
@@ -83,6 +122,7 @@ def proceseaza_alinierea(uploaded_file, depozit_selectat):
         default=transit.columns[1] if len(transit.columns) > 1 else transit.columns[0],
     )
 
+    # Filtrare pe depozit
     if col_plant_fr:
         franta = franta[
             franta[col_plant_fr].astype(str).str.strip().str.upper()
@@ -99,6 +139,7 @@ def proceseaza_alinierea(uploaded_file, depozit_selectat):
             == depozit_selectat
         ].copy()
 
+    # Conversie cantități la numere
     franta[col_qty_fr] = pd.to_numeric(
         franta[col_qty_fr], errors="coerce"
     ).fillna(0)
@@ -109,7 +150,7 @@ def proceseaza_alinierea(uploaded_file, depozit_selectat):
         transit[col_qty_tp], errors="coerce"
     ).fillna(0)
 
-    # Pivot Tables
+    # 1. Pivoturi
     pivot_fr = pd.pivot_table(
         franta, index=col_mat_fr, values=col_qty_fr, aggfunc="sum"
     ).reset_index()
@@ -128,7 +169,7 @@ def proceseaza_alinierea(uploaded_file, depozit_selectat):
     pivot_tp.columns = ["Row Labels", "Transit & Progress"]
     pivot_tp["Row Labels"] = pivot_tp["Row Labels"].astype(str).str.strip()
 
-    # Merge / VLOOKUP
+    # 2. VLOOKUP-uri (Left Merge)
     row_labels = (
         pd.concat(
             [
@@ -147,7 +188,7 @@ def proceseaza_alinierea(uploaded_file, depozit_selectat):
         .merge(pivot_tp, on="Row Labels", how="left")
     ).fillna(0)
 
-    # Calcule
+    # 3. Calcule Formule: DIFF, Status, Action
     rezultat["DIFF"] = (
         rezultat["BO RO"]
         + rezultat["Transit & Progress"]
@@ -157,7 +198,6 @@ def proceseaza_alinierea(uploaded_file, depozit_selectat):
         lambda d: "OK" if d == 0 else "NOK"
     )
 
-    # Logica inversată: < 0 este DELETE, > 0 este ADD
     def stabileste_actiune(diff):
         val = int(round(diff))
         if diff < 0:
@@ -169,7 +209,7 @@ def proceseaza_alinierea(uploaded_file, depozit_selectat):
     rezultat["ACTION"] = rezultat["DIFF"].apply(stabileste_actiune)
     rezultat = rezultat.sort_values(by="DIFF", ascending=True)
 
-    # Salvare în memorie
+    # 4. Generare Excel în memorie (fără fișiere locale)
     output_buffer = io.BytesIO()
     with pd.ExcelWriter(output_buffer, engine="openpyxl") as writer:
         pivot_fr.to_excel(writer, sheet_name="Pivot_BO_FR", index=False)
@@ -181,33 +221,88 @@ def proceseaza_alinierea(uploaded_file, depozit_selectat):
 
 
 # ==========================================
-# INTERFAȚĂ WEB (STREAMLIT)
+# MENIU LATERAL
 # ==========================================
-st.set_page_config(page_title="Aliniere Comenzi", layout="wide")
-st.title("📊 Aplicație Aliniere Comenzi FR / RO / Transit")
+with st.sidebar:
+    st.header("📌 Instrucțiuni")
+    st.markdown(
+        """
+    1. **Încarcă fișierul** Excel cu date brute.
+    2. **Alege depozitul** țintă din listă.
+    3. Apasă butonul **Generează Raportul**.
+    4. Descarcă fișierul calculat direct pe calculatorul tău.
+    
+    ---
+    **Reguli de calcul:**  
+    `DIFF = (BO RO + T&P) - BO FR`
+    - `DIFF < 0` ➔ **DELETE**
+    - `DIFF > 0` ➔ **ADD**
+    - `DIFF = 0` ➔ **OK**
+    """
+    )
 
-uploaded_file = st.file_uploader(
-    "1. Încarcă fișierul Excel cu date brute (.xlsx)", type=["xlsx"]
+# ==========================================
+# ZONA PRINCIPALĂ INTERFAȚĂ
+# ==========================================
+st.markdown(
+    '<div class="main-title">📦 Aliniere Comenzi & Reconciliere Stoc</div>',
+    unsafe_allow_html=True,
+)
+st.markdown(
+    '<div class="sub-title">Sistem automat de calcul pentru BO Franța, BO România și Tranzit</div>',
+    unsafe_allow_html=True,
 )
 
-plant = st.selectbox(
-    "2. Alege depozitul (Plant):", ["FR01", "FR02", "FR03", "FR06"]
-)
+col1, col2 = st.columns([2, 1])
 
-if uploaded_file and st.button("🚀 Generează Raportul"):
-    with st.spinner("Se procesează datele..."):
-        try:
-            excel_data, df_rezultat = proceseaza_alinierea(uploaded_file, plant)
-            st.success("Raportul a fost generat cu succes!")
+with col1:
+    uploaded_file = st.file_uploader(
+        "Încarcă fișierul Excel (.xlsx):", type=["xlsx"]
+    )
 
-            st.subheader("Previzualizare Rezultate:")
-            st.dataframe(df_rezultat, use_container_width=True)
+with col2:
+    plant = st.selectbox(
+        "Selectează Depozitul (Plant):", ["FR01", "FR02", "FR03", "FR06"]
+    )
 
-            st.download_button(
-                label="📥 Descarcă Raportul Excel",
-                data=excel_data,
-                file_name=f"Rezultat_Aliniere_{plant}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
-        except Exception as e:
-            st.error(f"Eroare la procesare: {e}")
+st.write("")
+if uploaded_file:
+    if st.button("🚀 Generează Raportul", use_container_width=True):
+        with st.spinner("Se prelucrează datele și formulele..."):
+            try:
+                excel_data, df_rezultat = proceseaza_alinierea(
+                    uploaded_file, plant
+                )
+
+                st.success(
+                    f"✅ Raportul pentru depozitul **{plant}** a fost generat cu succes!"
+                )
+
+                # Carduri cu statistici rapide
+                total_articole = len(df_rezultat)
+                total_delete = (
+                    df_rezultat["ACTION"].str.startswith("DELETE").sum()
+                )
+                total_add = df_rezultat["ACTION"].str.startswith("ADD").sum()
+                total_ok = (df_rezultat["ACTION"] == "OK").sum()
+
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("Total Articole", total_articole)
+                m2.metric("Acțiuni ADD", total_add)
+                m3.metric("Acțiuni DELETE", total_delete)
+                m4.metric("Status OK", total_ok)
+
+                # Tabel previzualizare
+                st.subheader("📋 Previzualizare Rezultate")
+                st.dataframe(df_rezultat, use_container_width=True, height=400)
+
+                # Buton de descărcare
+                st.download_button(
+                    label="📥 Descarcă Raportul Excel Final",
+                    data=excel_data,
+                    file_name=f"Rezultat_Aliniere_{plant}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True,
+                )
+            except Exception as e:
+                st.error(f"❌ A apărut o eroare la procesare: {e}")
