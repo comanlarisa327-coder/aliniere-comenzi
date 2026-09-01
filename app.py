@@ -3,93 +3,159 @@ import pandas as pd
 import streamlit as st
 
 # ==========================================
-# CONFIGURARE PAGINĂ ȘI DESIGN VIZUAL (CSS)
+# CONFIGURARE PAGINĂ & STILURI CU ANIMAȚII
 # ==========================================
 st.set_page_config(
     page_title="Portal Aliniere Comenzi",
-    page_icon="📦",
+    page_icon="✨",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# Stiluri pentru fundal deschis, fonturi și carduri moderne
 st.markdown(
     """
     <style>
-    /* Fundal general deschis cu degrade subtil */
+    /* Culoare de fundal deschisă (Pastel Cald & Gradient) */
     .stApp {
-        background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-        color: #1e293b;
+        background: linear-gradient(125deg, #f0f9ff 0%, #e0f2fe 50%, #f1f5f9 100%);
+        color: #0f172a;
+        overflow-x: hidden;
     }
 
-    /* Meniu lateral cu fundal alb curat */
+    /* Meniu Lateral */
     [data-testid="stSidebar"] {
-        background-color: #ffffff;
-        border-right: 1px solid #e2e8f0;
+        background: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(10px);
+        border-right: 1px solid #cbd5e1;
     }
 
-    /* Titluri */
+    /* Animație pentru Titlu (Fade In & Slide Down) */
     .main-title {
-        font-size: 2.2rem;
+        font-size: 2.3rem;
         font-weight: 800;
-        color: #1e3a8a;
+        color: #0369a1;
         margin-bottom: 0.2rem;
+        animation: fadeInDown 1s ease-out;
     }
-    
+
     .sub-title {
         font-size: 1.05rem;
         color: #475569;
         margin-bottom: 1.8rem;
+        animation: fadeInDown 1.2s ease-out;
     }
 
-    /* Carduri pentru Metrici */
+    @keyframes fadeInDown {
+        0% {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Animație continuă cu sfere plutitoare în background */
+    .floating-shape-1 {
+        position: fixed;
+        width: 250px;
+        height: 250px;
+        background: radial-gradient(circle, rgba(56, 189, 248, 0.25) 0%, rgba(255,255,255,0) 70%);
+        top: 10%;
+        left: 5%;
+        border-radius: 50%;
+        z-index: 0;
+        animation: floatShape 12s ease-in-out infinite alternate;
+        pointer-events: none;
+    }
+
+    .floating-shape-2 {
+        position: fixed;
+        width: 320px;
+        height: 320px;
+        background: radial-gradient(circle, rgba(129, 140, 248, 0.2) 0%, rgba(255,255,255,0) 70%);
+        bottom: 10%;
+        right: 5%;
+        border-radius: 50%;
+        z-index: 0;
+        animation: floatShape2 16s ease-in-out infinite alternate;
+        pointer-events: none;
+    }
+
+    @keyframes floatShape {
+        0% { transform: translate(0, 0) scale(1); }
+        50% { transform: translate(40px, 30px) scale(1.1); }
+        100% { transform: translate(-20px, 50px) scale(0.95); }
+    }
+
+    @keyframes floatShape2 {
+        0% { transform: translate(0, 0) scale(1); }
+        50% { transform: translate(-50px, -40px) scale(1.15); }
+        100% { transform: translate(30px, -20px) scale(0.9); }
+    }
+
+    /* Carduri Metrici cu efect de Hover */
     div[data-testid="stMetric"] {
-        background-color: #ffffff;
-        border-radius: 12px;
-        padding: 15px 20px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+        background: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(8px);
+        border-radius: 14px;
+        padding: 16px 20px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04);
         border: 1px solid #e2e8f0;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
     }
 
-    /* Buton Principal de Procesare */
+    div[data-testid="stMetric"]:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+    }
+
+    /* Buton Principal cu Animație Pulse & Glow */
     div.stButton > button:first-child {
-        background: linear-gradient(90deg, #2563eb, #1d4ed8);
+        background: linear-gradient(135deg, #0284c7, #2563eb);
         color: white;
-        font-weight: 600;
+        font-weight: 700;
         border: none;
-        border-radius: 10px;
-        padding: 0.6rem 1.2rem;
-        transition: all 0.2s ease-in-out;
-    }
-    
-    div.stButton > button:first-child:hover {
-        transform: scale(1.01);
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+        border-radius: 12px;
+        padding: 0.7rem 1.4rem;
+        box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    /* Buton de Descărcare Raport */
-    .stDownloadButton button {
-        background: linear-gradient(90deg, #10b981, #059669);
-        color: white;
-        font-weight: 600;
-        border: none;
-        border-radius: 10px;
-        padding: 0.6rem 1.2rem;
-        transition: all 0.2s ease-in-out;
+    div.stButton > button:first-child:hover {
+        transform: translateY(-2px) scale(1.01);
+        box-shadow: 0 8px 22px rgba(37, 99, 235, 0.45);
     }
-    
+
+    /* Buton Descărcare Excel */
+    .stDownloadButton button {
+        background: linear-gradient(135deg, #059669, #10b981);
+        color: white;
+        font-weight: 700;
+        border: none;
+        border-radius: 12px;
+        padding: 0.7rem 1.4rem;
+        box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
+        transition: all 0.3s ease;
+    }
+
     .stDownloadButton button:hover {
-        transform: scale(1.01);
-        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+        transform: translateY(-2px) scale(1.01);
+        box-shadow: 0 8px 22px rgba(16, 185, 129, 0.45);
     }
     </style>
+
+    <!-- Elemente animate de fundal -->
+    <div class="floating-shape-1"></div>
+    <div class="floating-shape-2"></div>
 """,
     unsafe_allow_html=True,
 )
 
 
 def gaseste_coloana(df, posibilitati, default=None):
-    """Identifică o coloană pe baza unor cuvinte cheie parțiale sau exacte."""
+    """Găsește numele corect al coloanei chiar dacă diferă spațiile sau majusculele."""
     cols_map = {str(c).strip().lower(): c for c in df.columns}
     for pos in posibilitati:
         pos_clean = pos.strip().lower()
@@ -195,7 +261,7 @@ def proceseaza_alinierea(uploaded_file, depozit_selectat):
         transit[col_qty_tp], errors="coerce"
     ).fillna(0)
 
-    # Pivot Tables
+    # 1. Pivoturi
     pivot_fr = pd.pivot_table(
         franta, index=col_mat_fr, values=col_qty_fr, aggfunc="sum"
     ).reset_index()
@@ -214,7 +280,7 @@ def proceseaza_alinierea(uploaded_file, depozit_selectat):
     pivot_tp.columns = ["Row Labels", "Transit & Progress"]
     pivot_tp["Row Labels"] = pivot_tp["Row Labels"].astype(str).str.strip()
 
-    # VLOOKUP Merge
+    # 2. VLOOKUP Merge
     row_labels = (
         pd.concat(
             [
@@ -233,7 +299,7 @@ def proceseaza_alinierea(uploaded_file, depozit_selectat):
         .merge(pivot_tp, on="Row Labels", how="left")
     ).fillna(0)
 
-    # Calcule: DIFF, STATUS, ACTION
+    # 3. Calcule: DIFF, Status, Action
     rezultat["DIFF"] = (
         rezultat["BO RO"]
         + rezultat["Transit & Progress"]
@@ -272,9 +338,9 @@ with st.sidebar:
     st.markdown(
         """
     1. **Încarcă fișierul** Excel cu date brute.
-    2. **Alege depozitul** dorit din selector.
-    3. Apasă **Generează Raportul**.
-    4. Salvează fișierul calculat pe calculator.
+    2. **Alege depozitul** din meniu.
+    3. Apasă butonul **Generează Raportul**.
+    4. Descarcă fișierul calculat.
     
     ---
     **Reguli de reconciliere:**  
@@ -286,14 +352,14 @@ with st.sidebar:
     )
 
 # ==========================================
-# CORPUL APLICAȚIEI
+# ZONA PRINCIPALĂ
 # ==========================================
 st.markdown(
     '<div class="main-title">📦 Aliniere Comenzi & Reconciliere Stoc</div>',
     unsafe_allow_html=True,
 )
 st.markdown(
-    '<div class="sub-title">Instrument automat pentru calculul comenzilor BO Franța, BO România și Tranzit</div>',
+    '<div class="sub-title">Sistem automat pentru calculul comenzilor BO Franța, BO România și Tranzit</div>',
     unsafe_allow_html=True,
 )
 
@@ -313,20 +379,20 @@ st.write("")
 
 if uploaded_file:
     if st.button("🚀 Generează Raportul", use_container_width=True):
-        with st.spinner("Se prelucrează datele și calculele..."):
+        with st.spinner("Se prelucrează datele și formulele..."):
             try:
                 excel_data, df_rezultat = proceseaza_alinierea(
                     uploaded_file, plant
                 )
 
-                # Animație de succes pe ecran
+                # Animație dublă de succes pe ecran
                 st.balloons()
 
                 st.success(
                     f"✨ Raportul pentru depozitul **{plant}** a fost generat cu succes!"
                 )
 
-                # Carduri statistice
+                # Carduri statistice animate
                 total_articole = len(df_rezultat)
                 total_delete = (
                     df_rezultat["ACTION"].str.startswith("DELETE").sum()
