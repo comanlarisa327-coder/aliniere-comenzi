@@ -3,7 +3,7 @@ import pandas as pd
 import streamlit as st
 
 # ==========================================
-# CONFIGURARE PAGINĂ & STILURI CU ANIMAȚII
+# CONFIGURARE PAGINĂ & STILURI VIZUALE
 # ==========================================
 st.set_page_config(
     page_title="Portal Aliniere Comenzi",
@@ -15,6 +15,20 @@ st.set_page_config(
 st.markdown(
     """
     <style>
+    /* Ramă elegantă în jurul întregului ecran */
+    .screen-frame {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        border: 9px solid rgba(14, 165, 233, 0.45); /* Ramă azurie modernă */
+        box-shadow: inset 0 0 20px rgba(14, 165, 233, 0.2), 0 0 15px rgba(14, 165, 233, 0.3);
+        pointer-events: none;
+        z-index: 99998;
+        box-sizing: border-box;
+    }
+
     /* Fundal general pastel deschis */
     .stApp {
         background: linear-gradient(125deg, #f0f9ff 0%, #e0f2fe 50%, #f1f5f9 100%);
@@ -29,7 +43,7 @@ st.markdown(
         border-right: 1px solid #cbd5e1;
     }
 
-    /* Titluri */
+    /* Titluri cu Animație Fade In */
     .main-title {
         font-size: 2.3rem;
         font-weight: 800;
@@ -50,36 +64,36 @@ st.markdown(
         100% { opacity: 1; transform: translateY(0); }
     }
 
-    /* Emoji-uri în Colțuri */
+    /* Emoji-uri Animate în Colțuri */
     .corner-emoji {
         position: fixed;
         font-size: 2.2rem;
-        z-index: 9999;
+        z-index: 99999;
         pointer-events: none;
         user-select: none;
         filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1));
     }
 
     .top-left {
-        top: 20px;
+        top: 22px;
         left: 25px;
         animation: swingEmoji 3s ease-in-out infinite alternate;
     }
 
     .top-right {
-        top: 20px;
+        top: 22px;
         right: 25px;
         animation: bounceEmoji 2.5s ease-in-out infinite alternate;
     }
 
     .bottom-left {
-        bottom: 20px;
+        bottom: 22px;
         left: 25px;
         animation: floatEmoji 3.5s ease-in-out infinite alternate;
     }
 
     .bottom-right {
-        bottom: 20px;
+        bottom: 22px;
         right: 25px;
         animation: pulseEmoji 2s ease-in-out infinite alternate;
     }
@@ -104,7 +118,7 @@ st.markdown(
         100% { transform: scale(1.2); }
     }
 
-    /* Sfere mari plutitoare de fundal */
+    /* Sfere plutitoare de fundal */
     .floating-shape-1 {
         position: fixed;
         width: 250px;
@@ -194,7 +208,10 @@ st.markdown(
     }
     </style>
 
-    <!-- Emoji-uri animate plasate în cele 4 colțuri -->
+    <!-- Rama pe marginea ecranului -->
+    <div class="screen-frame"></div>
+
+    <!-- Emoji-uri animate în cele 4 colțuri -->
     <div class="corner-emoji top-left">📦</div>
     <div class="corner-emoji top-right">🚀</div>
     <div class="corner-emoji bottom-left">📊</div>
@@ -392,9 +409,9 @@ with st.sidebar:
     st.markdown(
         """
     1. **Încarcă fișierul** Excel cu date brute.
-    2. **Alege depozitul** dorit din listă.
+    2. **Alege depozitul** din selector.
     3. Apasă **Generează Raportul**.
-    4. Descarcă fișierul calculat direct.
+    4. Descarcă fișierul calculat.
     
     ---
     **Reguli de reconciliere:**  
@@ -459,7 +476,7 @@ if uploaded_file:
                 m3.metric("Acțiuni DELETE", total_delete)
                 m4.metric("Status OK", total_ok)
 
-                # Previzualizare tabel
+                # Tabel rezultate
                 st.subheader("📋 Previzualizare Rezultate")
                 st.dataframe(df_rezultat, use_container_width=True, height=400)
 
