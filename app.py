@@ -157,18 +157,19 @@ def proceseaza_alinierea(uploaded_file, depozit_selectat):
         lambda d: "OK" if d == 0 else "NOK"
     )
 
+    # Logica inversată: < 0 este DELETE, > 0 este ADD
     def stabileste_actiune(diff):
         val = int(round(diff))
-        if val < 0:
-            return f"ADD {abs(val)}"
+        if diff < 0:
+            return f"DELETE {abs(val)}"
         elif val > 0:
-            return f"DELETE {val}"
+            return f"ADD {val}"
         return "OK"
 
     rezultat["ACTION"] = rezultat["DIFF"].apply(stabileste_actiune)
     rezultat = rezultat.sort_values(by="DIFF", ascending=True)
 
-    # Salvare în memorie (fără a fi nevoie de scriere pe disc)
+    # Salvare în memorie
     output_buffer = io.BytesIO()
     with pd.ExcelWriter(output_buffer, engine="openpyxl") as writer:
         pivot_fr.to_excel(writer, sheet_name="Pivot_BO_FR", index=False)
@@ -199,11 +200,9 @@ if uploaded_file and st.button("🚀 Generează Raportul"):
             excel_data, df_rezultat = proceseaza_alinierea(uploaded_file, plant)
             st.success("Raportul a fost generat cu succes!")
 
-            # Previzualizare tabel rezultate
             st.subheader("Previzualizare Rezultate:")
             st.dataframe(df_rezultat, use_container_width=True)
 
-            # Buton descărcare
             st.download_button(
                 label="📥 Descarcă Raportul Excel",
                 data=excel_data,
