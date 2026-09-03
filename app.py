@@ -15,7 +15,6 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* Ramă pe marginea ecranului */
     .screen-frame {
         position: fixed;
         top: 0;
@@ -29,21 +28,18 @@ st.markdown(
         box-sizing: border-box;
     }
 
-    /* Fundal general pastel deschis */
     .stApp {
         background: linear-gradient(125deg, #f0f9ff 0%, #e0f2fe 50%, #f1f5f9 100%);
         color: #0f172a;
         overflow-x: hidden;
     }
 
-    /* Meniu Lateral */
     [data-testid="stSidebar"] {
         background: rgba(255, 255, 255, 0.85);
         backdrop-filter: blur(10px);
         border-right: 1px solid #cbd5e1;
     }
 
-    /* Titluri cu Animație Fade In */
     .main-title {
         font-size: 2.3rem;
         font-weight: 800;
@@ -64,7 +60,6 @@ st.markdown(
         100% { opacity: 1; transform: translateY(0); }
     }
 
-    /* Emoji-uri Animate în Colțuri */
     .corner-emoji {
         position: fixed;
         font-size: 2.2rem;
@@ -99,7 +94,6 @@ st.markdown(
         100% { transform: scale(1.2); }
     }
 
-    /* Sfere mari plutitoare de fundal */
     .floating-shape-1 {
         position: fixed;
         width: 250px;
@@ -138,7 +132,6 @@ st.markdown(
         100% { transform: translate(30px, -20px) scale(0.9); }
     }
 
-    /* Carduri Metrici */
     div[data-testid="stMetric"] {
         background: rgba(255, 255, 255, 0.85);
         backdrop-filter: blur(8px);
@@ -154,7 +147,6 @@ st.markdown(
         box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
     }
 
-    /* Buton Principal */
     div.stButton > button:first-child {
         background: linear-gradient(135deg, #0284c7, #2563eb);
         color: white;
@@ -171,7 +163,6 @@ st.markdown(
         box-shadow: 0 8px 22px rgba(37, 99, 235, 0.45);
     }
 
-    /* Buton Descărcare Excel */
     .stDownloadButton button {
         background: linear-gradient(135deg, #059669, #10b981);
         color: white;
@@ -189,16 +180,11 @@ st.markdown(
     }
     </style>
 
-    <!-- Rama pe marginea ecranului -->
     <div class="screen-frame"></div>
-
-    <!-- Emoji-uri animate în cele 4 colțuri -->
     <div class="corner-emoji top-left">📦</div>
     <div class="corner-emoji top-right">🚀</div>
     <div class="corner-emoji bottom-left">📊</div>
     <div class="corner-emoji bottom-right">✨</div>
-
-    <!-- Sfere plutitoare de fundal -->
     <div class="floating-shape-1"></div>
     <div class="floating-shape-2"></div>
 """,
@@ -207,7 +193,7 @@ st.markdown(
 
 
 def gaseste_coloana_material(df):
-    """Găsește coloana strictă de Material Number (exclude Description/Name)."""
+    """Găsește coloana de Material Number (evită coloana de descriere/denumire)."""
     cols_map = {str(c).strip().lower(): c for c in df.columns}
     for col_lower, col_orig in cols_map.items():
         if not any(x in col_lower for x in ["name", "desc", "text", "denumire"]):
@@ -221,7 +207,7 @@ def gaseste_coloana_material(df):
 
 
 def gaseste_coloana(df, posibilitati, default=None):
-    """Găsește coloana pe baza unor cuvinte-cheie."""
+    """Găsește coloana pe baza unei liste de cuvinte-cheie."""
     cols_map = {str(c).strip().lower(): c for c in df.columns}
     for pos in posibilitati:
         pos_clean = pos.strip().lower()
@@ -235,21 +221,25 @@ def gaseste_coloana(df, posibilitati, default=None):
     return default
 
 
-def preselecteaza_foile(excel_file):
-    """Detectează indecșii cei mai probabili pentru foi pentru a-i pune default în dropdown-uri."""
+def preselecteaza_foile(excel_file, depozit_selectat):
+    """Detectează și preselectează foile din fișier, potrivind pivotul de tranzit cu depozitul ales."""
     excel = pd.ExcelFile(excel_file)
     nume_foi = excel.sheet_names
 
     def_fr, def_ro, def_tp = None, None, None
+    dep_clean = depozit_selectat.replace("ALL", "").strip().upper()
 
     for s in nume_foi:
         s_up = s.strip().upper()
-        if any(k in s_up for k in ["PIVOT", "T-P", "TRANSIT", "PROGRESS", "CAN"]):
-            if not def_tp:
+        # Căutare foaie specifică de Tranzit (ex: PIVOT T SI P FR01)
+        if any(k in s_up for k in ["PIVOT", "T SI P", "T-P", "TRANSIT", "PROGRESS"]):
+            if dep_clean and dep_clean in s_up:
                 def_tp = s
-        elif s_up == "BO FR" or ("FR" in s_up and not def_fr):
+            elif not def_tp:
+                def_tp = s
+        elif s_up == "BO FR" or ("FR" in s_up and not def_fr and "PIVOT" not in s_up):
             def_fr = s
-        elif s_up == "BO RO" or ("RO" in s_up and not def_ro):
+        elif s_up == "BO RO" or ("RO" in s_up and not def_ro and "PIVOT" not in s_up):
             def_ro = s
 
     idx_fr = nume_foi.index(def_fr) if def_fr in nume_foi else 0
@@ -268,17 +258,13 @@ def proceseaza_alinierea(uploaded_file, depozit_selectat, sheet_fr, sheet_ro, sh
     romania.columns = romania.columns.astype(str).str.strip()
     transit.columns = transit.columns.astype(str).str.strip()
 
-    # Identificare coloană Plant / Ship
     col_plant_fr = gaseste_coloana(franta, ["Plant", "Ship", "Depozit"])
     col_plant_ro = gaseste_coloana(romania, ["Ship", "Plant", "Depozit"])
-    col_plant_tp = gaseste_coloana(transit, ["Plant", "Ship", "Depozit"])
 
-    # Identificare cod piesă (Material Number)
     col_mat_fr = gaseste_coloana_material(franta)
     col_mat_ro = gaseste_coloana_material(romania)
     col_mat_tp = gaseste_coloana_material(transit)
 
-    # Identificare cantități
     col_qty_fr = gaseste_coloana(
         franta,
         ["Qty to be Delivered", "Open Qty", "Sum of Qty", "Delivered", "Qty", "Cantitate"],
@@ -295,11 +281,10 @@ def proceseaza_alinierea(uploaded_file, depozit_selectat, sheet_fr, sheet_ro, sh
         default=transit.columns[1] if len(transit.columns) > 1 else transit.columns[0],
     )
 
-    # Verificare dacă este selectat un depozit specific sau ALL / NULL
     depozit_filtru = depozit_selectat.strip().upper()
-    este_toate = depozit_filtru in ["ALL", "TOATE", "NULL", "TOATE DEPOZITELE", "ALL (TOATE)", ""]
+    este_toate = "ALL" in depozit_filtru
 
-    # Alocare Plant și filtrare
+    # Izolare strictă pe depozitul ales
     if col_plant_fr:
         franta["_PLANT_"] = franta[col_plant_fr].astype(str).str.strip().str.upper()
         if not este_toate:
@@ -314,24 +299,16 @@ def proceseaza_alinierea(uploaded_file, depozit_selectat, sheet_fr, sheet_ro, sh
     else:
         romania["_PLANT_"] = depozit_filtru if not este_toate else "N/A"
 
-    if col_plant_tp:
-        transit["_PLANT_"] = transit[col_plant_tp].astype(str).str.strip().str.upper()
-        if not este_toate:
-            transit = transit[transit["_PLANT_"] == depozit_filtru].copy()
-    else:
-        transit["_PLANT_"] = depozit_filtru if not este_toate else "N/A"
-
     # Conversie cantități
     franta[col_qty_fr] = pd.to_numeric(franta[col_qty_fr], errors="coerce").fillna(0)
     romania[col_qty_ro] = pd.to_numeric(romania[col_qty_ro], errors="coerce").fillna(0)
     transit[col_qty_tp] = pd.to_numeric(transit[col_qty_tp], errors="coerce").fillna(0)
 
-    # Excludere totaluri automate tranzit
     transit = transit[
         ~transit[col_mat_tp].astype(str).str.lower().isin(["total result", "grand total", "nan", ""])
     ].copy()
 
-    # Agregare pe cheia compusă (Material + Plant) pentru dublă localizare
+    # Agregare date pe depozit
     pivot_fr = (
         franta.groupby([col_mat_fr, "_PLANT_"], as_index=False)[col_qty_fr]
         .sum()
@@ -353,10 +330,8 @@ def proceseaza_alinierea(uploaded_file, depozit_selectat, sheet_fr, sheet_ro, sh
     )
     pivot_tp["Row Labels"] = pivot_tp["Row Labels"].astype(str).str.strip()
 
-    # Îmbinare FR și RO pe ambele câmpuri
+    # Îmbinare
     rezultat = pd.merge(pivot_fr, pivot_ro, on=["Row Labels", "_PLANT_"], how="outer").fillna(0)
-
-    # Adăugare Tranzit pe cod de piesă
     rezultat = pd.merge(rezultat, pivot_tp, on="Row Labels", how="left").fillna(0)
     rezultat = rezultat.rename(columns={"_PLANT_": "Plant / Ship"})
 
@@ -403,9 +378,9 @@ with st.sidebar:
     st.header("📌 Ghid Utilizare")
     st.markdown(
         """
-    1. **Încarcă fișierul** Excel cu date brute.
-    2. **Alege foile** corespunzătoare dacă sistemul nu le-a detectat direct.
-    3. **Selectează depozitul** dorit (sau alege `ALL / TOATE` pentru a vedea dubla localizare).
+    1. **Alege depozitul** dorit.
+    2. **Încarcă fișierul** Excel cu date brute.
+    3. **Selectează foile** (Franța, România și foaia de pivot de tranzit dedicată depozitului ales).
     4. Apasă **Generează Raportul**.
     
     ---
@@ -425,7 +400,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 st.markdown(
-    '<div class="sub-title">Recunoaștere automată a structurii tabelelor și calcul instant</div>',
+    '<div class="sub-title">Reconciliere automată pe depozite și gestionare dublă localizare</div>',
     unsafe_allow_html=True,
 )
 
@@ -437,18 +412,15 @@ with col1:
     )
 
 with col2:
-    # Opțiune adăugată pentru a include toate depozitele (null / all)
-    optiuni_depozite = ["ALL (Toate Depozitele)", "FR01", "FR02", "FR03", "FR06"]
     plant = st.selectbox(
-        "Selectează Depozitul (Plant):", optiuni_depozite
+        "Selectează Depozitul de reconciliat:", ["FR01", "FR02", "FR03", "FR06", "ALL (Toate Depozitele)"]
     )
 
 if uploaded_file:
     try:
-        # Preluare foi existente și selectarea automată a celor mai probabile
-        lista_foi, idx_fr, idx_ro, idx_tp = preselecteaza_foile(uploaded_file)
+        lista_foi, idx_fr, idx_ro, idx_tp = preselecteaza_foile(uploaded_file, plant)
 
-        st.subheader("📑 Confirmare / Selectare Foi din Fișier")
+        st.subheader("📑 Confirmare Foi Corespunzătoare:")
         f_col1, f_col2, f_col3 = st.columns(3)
 
         with f_col1:
@@ -456,7 +428,8 @@ if uploaded_file:
         with f_col2:
             sheet_ro = st.selectbox("Foaie România (BO RO):", lista_foi, index=idx_ro)
         with f_col3:
-            sheet_tp = st.selectbox("Foaie Transit (PIVOT T-P):", lista_foi, index=idx_tp)
+            label_tp = f"Foaie Tranzit ({plant}):" if "ALL" not in plant else "Foaie Tranzit:"
+            sheet_tp = st.selectbox(label_tp, lista_foi, index=idx_tp)
 
         st.write("")
         if st.button("🚀 Generează Raportul", use_container_width=True):
@@ -469,10 +442,9 @@ if uploaded_file:
                 st.balloons()
 
                 st.success(
-                    f"✨ Raportul pentru **{plant}** a fost generat cu succes!"
+                    f"✨ Raportul pentru depozitul **{plant}** a fost calculat corect!"
                 )
 
-                # Carduri statistice
                 total_articole = len(df_rezultat)
                 total_delete = (
                     df_rezultat["ACTION"].str.startswith("DELETE").sum()
@@ -481,16 +453,14 @@ if uploaded_file:
                 total_ok = (df_rezultat["ACTION"] == "OK").sum()
 
                 m1, m2, m3, m4 = st.columns(4)
-                m1.metric("Total Articole / Linii", total_articole)
+                m1.metric("Total Articole", total_articole)
                 m2.metric("Acțiuni ADD", total_add)
                 m3.metric("Acțiuni DELETE", total_delete)
                 m4.metric("Status OK", total_ok)
 
-                # Previzualizare tabel
                 st.subheader("📋 Previzualizare Rezultate")
                 st.dataframe(df_rezultat, use_container_width=True, height=400)
 
-                # Buton descărcare
                 nume_descarcare = f"Rezultat_Aliniere_{val_depozit}.xlsx"
                 st.download_button(
                     label="📥 Descarcă Raportul Excel Final",
