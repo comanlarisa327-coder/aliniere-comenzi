@@ -207,14 +207,12 @@ st.markdown(
 
 
 def gaseste_coloana_material(df):
-    """Găsește coloana strictă de Material Number, evitând Description sau Name."""
+    """Găsește coloana strictă de Material Number (exclude Description/Name)."""
     cols_map = {str(c).strip().lower(): c for c in df.columns}
-    # Prioritate 1: potrivire exactă fără descriere
     for col_lower, col_orig in cols_map.items():
         if not any(x in col_lower for x in ["name", "desc", "text", "denumire"]):
             if col_lower in ["material number", "material", "part number", "part no", "row labels", "cod material"]:
                 return col_orig
-    # Prioritate 2: potrivire parțială
     for col_lower, col_orig in cols_map.items():
         if not any(x in col_lower for x in ["name", "desc", "text", "denumire"]):
             if any(x in col_lower for x in ["material", "part", "cod"]):
@@ -223,7 +221,7 @@ def gaseste_coloana_material(df):
 
 
 def gaseste_coloana(df, posibilitati, default=None):
-    """Găsește coloana potrivită pe baza unor cuvinte-cheie."""
+    """Găsește coloana pe baza unor cuvinte-cheie."""
     cols_map = {str(c).strip().lower(): c for c in df.columns}
     for pos in posibilitati:
         pos_clean = pos.strip().lower()
@@ -237,58 +235,28 @@ def gaseste_coloana(df, posibilitati, default=None):
     return default
 
 
-def identifica_foile_dupa_continut(excel_file):
-    """Scanează conținutul și antetele tuturor foilor pentru a determina automat rolul fiecăreia."""
+def preselecteaza_foile(excel_file):
+    """Detectează indecșii cei mai probabili pentru foi pentru a-i pune default în dropdown-uri."""
     excel = pd.ExcelFile(excel_file)
     nume_foi = excel.sheet_names
 
-    scoruri = {s: {"fr": 0, "ro": 0, "tp": 0} for s in nume_foi}
+    def_fr, def_ro, def_tp = None, None, None
 
     for s in nume_foi:
-        s_clean = s.strip().lower()
+        s_up = s.strip().upper()
+        if any(k in s_up for k in ["PIVOT", "T-P", "TRANSIT", "PROGRESS", "CAN"]):
+            if not def_tp:
+                def_tp = s
+        elif s_up == "BO FR" or ("FR" in s_up and not def_fr):
+            def_fr = s
+        elif s_up == "BO RO" or ("RO" in s_up and not def_ro):
+            def_ro = s
 
-        # 1. Verificare indicii din numele foii
-        if any(k in s_clean for k in ["t+p", "t&p", "transit", "progress", "tranzit", "progres", "tp", "pivot"]):
-            scoruri[s]["tp"] += 10
-        if any(k in s_clean for k in ["fr", "france", "franta"]):
-            scoruri[s]["fr"] += 8
-        if any(k in s_clean for k in ["ro", "romania", "roumanie"]):
-            scoruri[s]["ro"] += 8
+    idx_fr = nume_foi.index(def_fr) if def_fr in nume_foi else 0
+    idx_ro = nume_foi.index(def_ro) if def_ro in nume_foi else min(1, len(nume_foi) - 1)
+    idx_tp = nume_foi.index(def_tp) if def_tp in nume_foi else min(2, len(nume_foi) - 1)
 
-        # 2. Inspectare coloane reale din interiorul tabelului
-        try:
-            df_sample = pd.read_excel(excel_file, sheet_name=s, nrows=5)
-            cols_text = " ".join([str(c).lower() for c in df_sample.columns])
-
-            if any(k in cols_text for k in ["transit", "progress", "sum of can", "can"]):
-                scoruri[s]["tp"] += 15
-
-            if "to be delivered" in cols_text or "delivered" in cols_text:
-                scoruri[s]["fr"] += 12
-
-            if ("open qty" in cols_text or "ship" in cols_text or "cumulconf" in cols_text) and "to be delivered" not in cols_text:
-                scoruri[s]["ro"] += 12
-
-        except Exception:
-            pass
-
-    foi_disponibile = list(nume_foi)
-
-    sheet_tp = max(foi_disponibile, key=lambda s: scoruri[s]["tp"])
-    foi_disponibile.remove(sheet_tp)
-
-    if foi_disponibile:
-        sheet_fr = max(foi_disponibile, key=lambda s: scoruri[s]["fr"])
-        foi_disponibile.remove(sheet_fr)
-    else:
-        sheet_fr = sheet_tp
-
-    if foi_disponibile:
-        sheet_ro = max(foi_disponibile, key=lambda s: scoruri[s]["ro"])
-    else:
-        sheet_ro = sheet_fr
-
-    return sheet_fr, sheet_ro, sheet_tp
+    return nume_foi, idx_fr, idx_ro, idx_tp
 
 
 def proceseaza_alinierea(uploaded_file, depozit_selectat, sheet_fr, sheet_ro, sheet_tp):
@@ -300,12 +268,12 @@ def proceseaza_alinierea(uploaded_file, depozit_selectat, sheet_fr, sheet_ro, sh
     romania.columns = romania.columns.astype(str).str.strip()
     transit.columns = transit.columns.astype(str).str.strip()
 
-    # Identificare coloană Plant / Ship (pentru dublă localizare)
+    # Identificare coloană Plant / Ship
     col_plant_fr = gaseste_coloana(franta, ["Plant", "Ship", "Depozit"])
     col_plant_ro = gaseste_coloana(romania, ["Ship", "Plant", "Depozit"])
     col_plant_tp = gaseste_coloana(transit, ["Plant", "Ship", "Depozit"])
 
-    # Identificare cod piesă fără Description
+    # Identificare cod piesă (Material Number)
     col_mat_fr = gaseste_coloana_material(franta)
     col_mat_ro = gaseste_coloana_material(romania)
     col_mat_tp = gaseste_coloana_material(transit)
@@ -327,41 +295,43 @@ def proceseaza_alinierea(uploaded_file, depozit_selectat, sheet_fr, sheet_ro, sh
         default=transit.columns[1] if len(transit.columns) > 1 else transit.columns[0],
     )
 
+    # Verificare dacă este selectat un depozit specific sau ALL / NULL
     depozit_filtru = depozit_selectat.strip().upper()
+    este_toate = depozit_filtru in ["ALL", "TOATE", "NULL", "TOATE DEPOZITELE", "ALL (TOATE)", ""]
 
-    # Filtrare și aliniere pe depozit
+    # Alocare Plant și filtrare
     if col_plant_fr:
         franta["_PLANT_"] = franta[col_plant_fr].astype(str).str.strip().str.upper()
-        if depozit_filtru and depozit_filtru != "ALL":
+        if not este_toate:
             franta = franta[franta["_PLANT_"] == depozit_filtru].copy()
     else:
-        franta["_PLANT_"] = depozit_filtru if depozit_filtru != "ALL" else "N/A"
+        franta["_PLANT_"] = depozit_filtru if not este_toate else "N/A"
 
     if col_plant_ro:
         romania["_PLANT_"] = romania[col_plant_ro].astype(str).str.strip().str.upper()
-        if depozit_filtru and depozit_filtru != "ALL":
+        if not este_toate:
             romania = romania[romania["_PLANT_"] == depozit_filtru].copy()
     else:
-        romania["_PLANT_"] = depozit_filtru if depozit_filtru != "ALL" else "N/A"
+        romania["_PLANT_"] = depozit_filtru if not este_toate else "N/A"
 
     if col_plant_tp:
         transit["_PLANT_"] = transit[col_plant_tp].astype(str).str.strip().str.upper()
-        if depozit_filtru and depozit_filtru != "ALL":
+        if not este_toate:
             transit = transit[transit["_PLANT_"] == depozit_filtru].copy()
     else:
-        transit["_PLANT_"] = depozit_filtru if depozit_filtru != "ALL" else "N/A"
+        transit["_PLANT_"] = depozit_filtru if not este_toate else "N/A"
 
-    # Conversie numerică cantități
+    # Conversie cantități
     franta[col_qty_fr] = pd.to_numeric(franta[col_qty_fr], errors="coerce").fillna(0)
     romania[col_qty_ro] = pd.to_numeric(romania[col_qty_ro], errors="coerce").fillna(0)
     transit[col_qty_tp] = pd.to_numeric(transit[col_qty_tp], errors="coerce").fillna(0)
 
-    # Excludere totaluri automate din pivotul de tranzit
+    # Excludere totaluri automate tranzit
     transit = transit[
         ~transit[col_mat_tp].astype(str).str.lower().isin(["total result", "grand total", "nan", ""])
     ].copy()
 
-    # 1. Agregare pe cheia compusă (Material + Plant) pentru dublă localizare
+    # Agregare pe cheia compusă (Material + Plant) pentru dublă localizare
     pivot_fr = (
         franta.groupby([col_mat_fr, "_PLANT_"], as_index=False)[col_qty_fr]
         .sum()
@@ -376,7 +346,6 @@ def proceseaza_alinierea(uploaded_file, depozit_selectat, sheet_fr, sheet_ro, sh
     )
     pivot_ro["Row Labels"] = pivot_ro["Row Labels"].astype(str).str.strip()
 
-    # Tranzitul este pe Material
     pivot_tp = (
         transit.groupby(col_mat_tp, as_index=False)[col_qty_tp]
         .sum()
@@ -384,14 +353,14 @@ def proceseaza_alinierea(uploaded_file, depozit_selectat, sheet_fr, sheet_ro, sh
     )
     pivot_tp["Row Labels"] = pivot_tp["Row Labels"].astype(str).str.strip()
 
-    # 2. Îmbinare FR și RO pe (Row Labels + Plant)
+    # Îmbinare FR și RO pe ambele câmpuri
     rezultat = pd.merge(pivot_fr, pivot_ro, on=["Row Labels", "_PLANT_"], how="outer").fillna(0)
 
-    # Adăugare Tranzit pe Row Labels
+    # Adăugare Tranzit pe cod de piesă
     rezultat = pd.merge(rezultat, pivot_tp, on="Row Labels", how="left").fillna(0)
     rezultat = rezultat.rename(columns={"_PLANT_": "Plant / Ship"})
 
-    # 3. Formule: DIFF, Status, Action
+    # Formule: DIFF, Status, Action
     rezultat["DIFF"] = rezultat["BO RO"] + rezultat["Transit & Progress"] - rezultat["BO FR"]
     rezultat["COMM - OK/NOK"] = rezultat["DIFF"].apply(lambda d: "OK" if round(d) == 0 else "NOK")
 
@@ -404,8 +373,7 @@ def proceseaza_alinierea(uploaded_file, depozit_selectat, sheet_fr, sheet_ro, sh
         return "OK"
 
     rezultat["ACTION"] = rezultat["DIFF"].apply(stabileste_actiune)
-    
-    # Ordonare coloane
+
     coloane_finale = [
         "Plant / Ship",
         "Row Labels",
@@ -436,8 +404,8 @@ with st.sidebar:
     st.markdown(
         """
     1. **Încarcă fișierul** Excel cu date brute.
-    2. Sistemul **detectează automat foile** după conținut.
-    3. **Alege depozitul** dorit.
+    2. **Alege foile** corespunzătoare dacă sistemul nu le-a detectat direct.
+    3. **Selectează depozitul** dorit (sau alege `ALL / TOATE` pentru a vedea dubla localizare).
     4. Apasă **Generează Raportul**.
     
     ---
@@ -469,32 +437,39 @@ with col1:
     )
 
 with col2:
+    # Opțiune adăugată pentru a include toate depozitele (null / all)
+    optiuni_depozite = ["ALL (Toate Depozitele)", "FR01", "FR02", "FR03", "FR06"]
     plant = st.selectbox(
-        "Selectează Depozitul (Plant):", ["FR01", "FR02", "FR03", "FR06"]
+        "Selectează Depozitul (Plant):", optiuni_depozite
     )
 
 if uploaded_file:
     try:
-        sheet_fr, sheet_ro, sheet_tp = identifica_foile_dupa_continut(uploaded_file)
+        # Preluare foi existente și selectarea automată a celor mai probabile
+        lista_foi, idx_fr, idx_ro, idx_tp = preselecteaza_foile(uploaded_file)
 
-        st.info(
-            f"🔍 **Foi identificate automat după conținut:** "
-            f"Franța ➔ **`{sheet_fr}`** | "
-            f"România ➔ **`{sheet_ro}`** | "
-            f"Tranzit ➔ **`{sheet_tp}`**"
-        )
+        st.subheader("📑 Confirmare / Selectare Foi din Fișier")
+        f_col1, f_col2, f_col3 = st.columns(3)
+
+        with f_col1:
+            sheet_fr = st.selectbox("Foaie Franța (BO FR):", lista_foi, index=idx_fr)
+        with f_col2:
+            sheet_ro = st.selectbox("Foaie România (BO RO):", lista_foi, index=idx_ro)
+        with f_col3:
+            sheet_tp = st.selectbox("Foaie Transit (PIVOT T-P):", lista_foi, index=idx_tp)
 
         st.write("")
         if st.button("🚀 Generează Raportul", use_container_width=True):
             with st.spinner("Se prelucrează datele și formulele..."):
+                val_depozit = "ALL" if "ALL" in plant else plant
                 excel_data, df_rezultat = proceseaza_alinierea(
-                    uploaded_file, plant, sheet_fr, sheet_ro, sheet_tp
+                    uploaded_file, val_depozit, sheet_fr, sheet_ro, sheet_tp
                 )
 
                 st.balloons()
 
                 st.success(
-                    f"✨ Raportul pentru depozitul **{plant}** a fost generat cu succes!"
+                    f"✨ Raportul pentru **{plant}** a fost generat cu succes!"
                 )
 
                 # Carduri statistice
@@ -506,7 +481,7 @@ if uploaded_file:
                 total_ok = (df_rezultat["ACTION"] == "OK").sum()
 
                 m1, m2, m3, m4 = st.columns(4)
-                m1.metric("Total Articole", total_articole)
+                m1.metric("Total Articole / Linii", total_articole)
                 m2.metric("Acțiuni ADD", total_add)
                 m3.metric("Acțiuni DELETE", total_delete)
                 m4.metric("Status OK", total_ok)
@@ -516,10 +491,11 @@ if uploaded_file:
                 st.dataframe(df_rezultat, use_container_width=True, height=400)
 
                 # Buton descărcare
+                nume_descarcare = f"Rezultat_Aliniere_{val_depozit}.xlsx"
                 st.download_button(
                     label="📥 Descarcă Raportul Excel Final",
                     data=excel_data,
-                    file_name=f"Rezultat_Aliniere_{plant}.xlsx",
+                    file_name=nume_descarcare,
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True,
                 )
